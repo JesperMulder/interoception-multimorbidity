@@ -69,7 +69,8 @@ required_packages <- c(
   "openxlsx",   # Advanced Excel writing (formatting, styles)
   "poLCA",      # Latent Class Analysis
   "effectsize", # Standardised parameters
-  "broom"       # Tidy model output
+  "broom",      # Tidy model output
+  "car"         # Multicollinearity: vif() / GVIF for multi-df predictors
 )
 
 load_packages <- function(packages) {
@@ -3134,7 +3135,222 @@ if (length(sens_models) == 0) {
   cat("\nNo sensitivity models to run. Section 9 skipped.\n")
 } else {
   
-  # ── 9.5 Extract and print results ──────────────────────────────────────────
+  # ── 9.5 Multicollinearity diagnostics ────────────────────────────────────
+  # Checks whether any predictor in the covariate-adjusted models is
+  # collinear enough to distort its coefficient or inflate its SE.
+  #
+  # Method: car::vif() is used throughout because it handles both
+  #   • single-df predictors   → returns VIF  (= GVIF when Df = 1)
+  #   • multi-df predictors    → returns GVIF and GVIF^(1/(2*Df)), the
+  #     scale-comparable generalisation (Fox & Monette 1992)
+  #
+  # Thresholds applied to the *adjusted* GVIF^(1/(2*Df)) column
+  # (equals sqrt(VIF) for single-df terms; directly comparable across Df):
+  #   GVIF^(1/(2*Df)) > sqrt(5)  ≈ 2.24  →  moderate concern (FLAG)
+  #   GVIF^(1/(2*Df)) > sqrt(10) ≈ 3.16  →  serious concern  (WARN)
+  #
+  # Supplementary check: matrix condition number κ of the model-matrix
+  # column space. κ > 30 suggests near-collinearity; κ > 100 is severe.
+  #
+  # Note on LCA_Class: as a K-1 dummy-coded factor it contributes K-1
+  # columns to the design matrix. car::vif() correctly computes its GVIF
+  # as a single-row entry and adjusts for Df, so the LCA_Class GVIF is
+  # directly comparable with scalar covariate VIFs.
+  
+  # ── Helper: compute and print VIF / GVIF for one model ───────────────────
+  check_vif <- function(model, model_label,
+                        adj_threshold_moderate = sqrt(5),
+                        adj_threshold_severe   = sqrt(10)) {
+    
+    cat("\n", strrep("─", 65), "\n", sep = "")
+    cat(" Multicollinearity —", model_label, "\n")
+    cat(strrep("─", 65), "\n", sep = "")
+    
+    # car::vif() returns a vector (single-df only) or a 3-column matrix
+    vif_raw <- tryCatch(
+      car::vif(model),
+      error = function(e) {
+        cat("  car::vif() failed:", e$message,
+            "\n  (Model may have only one predictor — VIF not applicable.)\n")
+        return(NULL)
+      }
+    )
+    
+    if (is.null(vif_raw)) return(invisible(NULL))
+    
+    # Normalise to a data.frame with columns: Term, GVIF, Df, GVIF_adj
+    if (is.matrix(vif_raw)) {
+      vif_df <- data.frame(
+        Term     = rownames(vif_raw),
+        GVIF     = round(vif_raw[, "GVIF"],              3),
+        Df       = as.integer(vif_raw[, "Df"]),
+        GVIF_adj = round(vif_raw[, "GVIF^(1/(2*Df))"],  3),
+        stringsAsFactors = FALSE
+      )
+    } else {
+      # Vector: each element is VIF for a single-df term
+      vif_df <- data.frame(
+        Term     = names(vif_raw),
+        GVIF     = round(as.numeric(vif_raw),              3),
+        Df       = 1L,
+        GVIF_adj = round(sqrt(as.numeric(vif_raw)),        3),
+        stringsAsFactors = FALSE
+      )
+    }
+    
+    # Flag column
+    vif_df$Flag <- dplyr::case_when(
+      vif_df$GVIF_adj > adj_threshold_severe   ~ "WARN  (GVIF_adj > 3.16)",
+      vif_df$GVIF_adj > adj_threshold_moderate ~ "FLAG  (GVIF_adj > 2.24)",
+      TRUE                                      ~ "OK"
+    )
+    
+    print(vif_df, row.names = FALSE)
+    
+    n_flags <- sum(vif_df$Flag != "OK")
+    if (n_flags == 0) {
+      cat("\n  \u2713 No multicollinearity concerns (all GVIF_adj \u2264 2.24).\n")
+    } else {
+      n_warn <- sum(grepl("^WARN", vif_df$Flag))
+      n_flag <- sum(grepl("^FLAG", vif_df$Flag))
+      if (n_warn > 0)
+        cat("\n  \u2717 SERIOUS \u2014 ", n_warn,
+            " term(s) with GVIF_adj > 3.16. ",
+            "Consider removing or combining collinear predictors.\n",
+            sep = "")
+      if (n_flag > 0)
+        cat("\n  \u25b3 MODERATE \u2014 ", n_flag,
+            " term(s) with GVIF_adj > 2.24. ",
+            "Inspect correlations; coefficient SEs may be inflated.\n",
+            sep = "")
+    }
+    
+    # ── Condition number of the model matrix ─────────────────────────────────
+    mm <- tryCatch(model.matrix(model), error = function(e) NULL)
+    if (!is.null(mm)) {
+      # Drop the intercept column before computing kappa
+      mm_no_int <- mm[, colnames(mm) != "(Intercept)", drop = FALSE]
+      if (ncol(mm_no_int) >= 2) {
+        kappa_val  <- round(kappa(mm_no_int, exact = FALSE), 1)
+        kappa_flag <- dplyr::case_when(
+          kappa_val > 100 ~ "WARN  (\u03ba > 100: severe near-collinearity)",
+          kappa_val >  30 ~ "FLAG  (\u03ba > 30: potential near-collinearity)",
+          TRUE            ~ "OK"
+        )
+        cat(sprintf("\n  Condition number \u03ba = %.1f  %s\n",
+                    kappa_val, kappa_flag))
+      }
+    }
+    
+    cat(strrep("─", 65), "\n", sep = "")
+    invisible(vif_df)
+  }
+  
+  # ── Helper: pairwise Pearson / Cramér's V correlation table ──────────────
+  # Continuous–continuous: Pearson r.
+  # Continuous–categorical and categorical–categorical: Cramér's V.
+  # Helps trace the source of any flagged VIF.
+  
+  check_covariate_correlations <- function(df, covariates, label,
+                                           r_threshold = 0.70,
+                                           v_threshold = 0.50) {
+    
+    if (length(covariates) < 2) {
+      cat("  Fewer than 2 covariates \u2014 pairwise correlation skipped.\n")
+      return(invisible(NULL))
+    }
+    
+    cat("\n Covariate pairwise associations \u2014", label, "\n")
+    
+    rows  <- list()
+    pairs <- combn(covariates, 2, simplify = FALSE)
+    
+    for (p in pairs) {
+      x      <- df[[p[1]]]; y <- df[[p[2]]]
+      x_cont <- is.numeric(x) || is.integer(x)
+      y_cont <- is.numeric(y) || is.integer(y)
+      
+      if (x_cont && y_cont) {
+        stat <- round(cor(as.numeric(x), as.numeric(y), use = "complete.obs"), 3)
+        type <- "Pearson r"
+        flag <- if (abs(stat) > r_threshold)
+          paste0("FLAG (|r| > ", r_threshold, ")")
+        else "OK"
+      } else {
+        # Use cramers_v() defined in Section 4
+        stat <- round(cramers_v(as.factor(x), as.factor(y)), 3)
+        type <- "Cramér's V"
+        flag <- if (!is.na(stat) && stat > v_threshold)
+          paste0("FLAG (V > ", v_threshold, ")")
+        else "OK"
+      }
+      
+      rows[[length(rows) + 1]] <- data.frame(
+        Var1      = p[1], Var2 = p[2], Statistic = type,
+        Value     = stat, Flag = flag,
+        stringsAsFactors = FALSE
+      )
+    }
+    
+    corr_tbl <- dplyr::bind_rows(rows)
+    print(corr_tbl, row.names = FALSE)
+    
+    n_flagged <- sum(corr_tbl$Flag != "OK")
+    if (n_flagged == 0)
+      cat("  \u2713 No high pairwise associations among covariates.\n")
+    else
+      cat("  \u25b3", n_flagged,
+          "pair(s) exceed the association threshold",
+          "\u2014 these may be driving elevated VIF.\n")
+    
+    invisible(corr_tbl)
+  }
+  
+  # ── Run multicollinearity checks for all fitted sensitivity models ─────────
+  cat("\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
+  cat(" SECTION 9.5 \u2014 Multicollinearity Diagnostics (Sensitivity Models)\n")
+  cat("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
+  
+  vif_results <- list()
+  
+  for (nm in names(sens_models)) {
+    vif_results[[nm]] <- check_vif(sens_models[[nm]], model_label = nm)
+  }
+  
+  # ── Pairwise covariate associations (once per sample, not per model) ───────
+  if (run_da_sens && length(sensitivity_covariates_da) >= 2) {
+    check_covariate_correlations(
+      df_da_clean, sensitivity_covariates_da, label = "DA covariates"
+    )
+  }
+  
+  if (run_l_sens && length(sensitivity_covariates_l) >= 2) {
+    check_covariate_correlations(
+      df_l_clean, sensitivity_covariates_l, label = "L covariates"
+    )
+  }
+  
+  # ── Compact VIF summary table across all sensitivity models ───────────────
+  # Useful for a single-glance appendix entry.
+  
+  vif_summary <- dplyr::bind_rows(
+    lapply(names(vif_results), function(nm) {
+      v <- vif_results[[nm]]
+      if (is.null(v)) return(NULL)
+      v$Model <- nm
+      v[, c("Model", "Term", "GVIF", "Df", "GVIF_adj", "Flag")]
+    })
+  )
+  
+  if (nrow(vif_summary) > 0) {
+    cat("\n\u2550\u2550\u2550 VIF / GVIF summary \u2014 all sensitivity models \u2550\u2550\u2550\n")
+    print(vif_summary, row.names = FALSE)
+    .vif_export_pending <- TRUE   # flag consumed in 9.7
+  }
+  
+  cat("\nSection 9.5 multicollinearity diagnostics complete.\n")
+  
+  # ── 9.6 Extract and print results ──────────────────────────────────────────
   sens_dep_var_map <- list(
     DA_IAS  = "IAS_Totaal", DA_IATS = "IATS_Totaal",
     L_IAS   = "IAS_Totaal", L_IATS  = "IATS_Totaal"
@@ -3154,7 +3370,7 @@ if (length(sens_models) == 0) {
   cat("\n")
   for (nm in names(sens_ols_list)) print_ols_table(sens_ols_list[[nm]])
   
-  # ── 9.6 Export to Excel ────────────────────────────────────────────────────
+  # ── 9.7 Export to Excel ────────────────────────────────────────────────────
   covariates_note <- paste0(
     "Sensitivity analysis: LCA_Class + ",
     paste(unique(c(sensitivity_covariates_da, sensitivity_covariates_l)),
@@ -3170,7 +3386,79 @@ if (length(sens_models) == 0) {
     class_names_map = list(DA = class_names_da, L = class_names_l)
   )
   
-  # ── 9.7 Coefficient plots ─────────────────────────────────────────────────
+  # Append VIF summary as an extra sheet to the sensitivity workbook
+  if (exists(".vif_export_pending") && .vif_export_pending &&
+      nrow(vif_summary) > 0) {
+    tryCatch({
+      wb_vif <- openxlsx::loadWorkbook(
+        file.path(base_path, "sensitivity_regression_results.xlsx")
+      )
+      sty_vh <- openxlsx::createStyle(
+        fontName = "Calibri", fontSize = 11, textDecoration = "bold",
+        border = c("top", "bottom"), borderStyle = "thin", halign = "center"
+      )
+      sty_vd <- openxlsx::createStyle(
+        fontName = "Calibri", fontSize = 11, halign = "center"
+      )
+      sty_vl <- openxlsx::createStyle(
+        fontName = "Calibri", fontSize = 11, halign = "center",
+        border = "bottom", borderStyle = "thin"
+      )
+      sty_vn <- openxlsx::createStyle(
+        fontName = "Calibri", fontSize = 10, wrapText = TRUE
+      )
+      openxlsx::addWorksheet(wb_vif, "VIF diagnostics")
+      openxlsx::writeData(
+        wb_vif, "VIF diagnostics",
+        as.data.frame(t(names(vif_summary))),
+        startRow = 1, colNames = FALSE
+      )
+      openxlsx::addStyle(wb_vif, "VIF diagnostics", sty_vh,
+                         rows = 1, cols = seq_along(vif_summary),
+                         gridExpand = TRUE)
+      n_vr <- nrow(vif_summary)
+      for (i in seq_len(n_vr)) {
+        sty_row <- if (i == n_vr) sty_vl else sty_vd
+        openxlsx::writeData(
+          wb_vif, "VIF diagnostics",
+          as.data.frame(t(as.character(unlist(vif_summary[i, ])))),
+          startRow = i + 1, colNames = FALSE
+        )
+        openxlsx::addStyle(wb_vif, "VIF diagnostics", sty_row,
+                           rows = i + 1, cols = seq_along(vif_summary),
+                           gridExpand = TRUE)
+      }
+      note_row_vif <- n_vr + 3L
+      openxlsx::writeData(
+        wb_vif, "VIF diagnostics",
+        paste0(
+          "Note. GVIF_adj = GVIF^(1/(2*Df)); comparable across single- and ",
+          "multi-df predictors (Fox & Monette 1992). ",
+          "Thresholds: GVIF_adj > 2.24 (= sqrt(5)) = moderate concern (FLAG); ",
+          "> 3.16 (= sqrt(10)) = serious concern (WARN). ",
+          "Condition number \u03ba computed on the model matrix excluding the intercept."
+        ),
+        startRow = note_row_vif, startCol = 1
+      )
+      openxlsx::addStyle(wb_vif, "VIF diagnostics", sty_vn,
+                         rows = note_row_vif,
+                         cols = seq_along(vif_summary), gridExpand = TRUE)
+      openxlsx::setColWidths(wb_vif, "VIF diagnostics",
+                             cols = 1:2, widths = 28)
+      openxlsx::setColWidths(wb_vif, "VIF diagnostics",
+                             cols = 3:6, widths = 14)
+      openxlsx::saveWorkbook(
+        wb_vif,
+        file.path(base_path, "sensitivity_regression_results.xlsx"),
+        overwrite = TRUE
+      )
+      cat("VIF diagnostics sheet appended to sensitivity_regression_results.xlsx\n")
+    }, error = function(e) {
+      warning("Could not append VIF sheet: ", e$message)
+    })
+  }
+  
+  # ── 9.8 Coefficient plots ─────────────────────────────────────────────────
   if (run_da_sens) {
     p_sens_da <- make_coef_plot(
       sens_ols_list, "DA",
