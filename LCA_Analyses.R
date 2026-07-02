@@ -1,10 +1,9 @@
 # ══════════════════════════════════════════════════════════════════════════════
-# Title:       Latent Class Analysis — Health Profiles and Interoceptive
-#              Awareness
-# Authors:     [Author Name(s)]
-# Affiliation: [Institution]
-# Date:        [YYYY-MM-DD]
-# R version:   [e.g., 4.4.0 — see sessionInfo() output at end of script]
+# Title:       Interoceptive accuracy and attention across multimorbidity classes
+# Authors:     Mulder, J.
+# Affiliation: Leiden University Medical Center
+# Date:        09-06-2026
+# R version:   4.5.2
 #
 # Description:
 #   Full analysis pipeline for latent class analysis (LCA) of health profiles
@@ -28,8 +27,9 @@
 #   9 — Sensitivity analyses (covariate-adjusted regressions)
 #
 # Citation:
-#   [Author et al. (Year). Title. Journal, Vol(Issue), pp–pp.
-#    https://doi.org/xxxxx]
+#   Mulder, J., Böker, C. M., Smit, A. K., & Kiefte-de Jong, J. C. (2026).
+#   Interoceptive accuracy and attention across multimorbidity classes: A latent class analysis.
+#   medRxiv. https://doi.org/10.64898/2026.06.08.26355147
 #
 # License:     MIT (see LICENSE file)
 #
