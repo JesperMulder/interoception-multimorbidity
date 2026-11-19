@@ -4639,5 +4639,9 @@ writexl::write_xlsx(
          "judge them together with skewness/kurtosis."))),
   path = file.path(base_path, "regression_diagnostics.xlsx"))
 
+# ── Session information (reproducibility) ─────────────────────────────────────
+writeLines(capture.output(sessionInfo()),
+           file.path(base_path, "sessionInfo.txt"))
+
 cat("\n═══ ANALYSIS COMPLETE ═══\n")
 cat("All outputs saved to:", base_path, "\n")
