@@ -75,7 +75,7 @@ install.packages(c(
 
 1. Clone or download this repository.
 2. Obtain the raw data files (see **Data Availability** below) and place them in `data/raw/`.
-3. Open `LCA_Analyses.R` and update the three path variables near the top of **Section 1**:
+3. Set the repository folder as your R working directory (in RStudio: open the folder as a project or use `setwd()`). The script uses paths relative to this folder, so no path edits are needed as long as the files in `data/raw/` have these names (set in **Section 1** of `LCA_Analyses.R`):
 
 ```r
 path_da   <- file.path("data", "raw", "Part1_19082024_clean_JM_version2.sav")
