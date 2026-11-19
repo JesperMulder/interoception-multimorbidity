@@ -39,15 +39,15 @@ Dutch community samples (DA and L).
 
 ## Requirements
 
-* Tested on R version 4.5.2
+* Tested on R version 4.6.1
 * All required packages are listed at the top of `LCA_Analyses.R`.
 Install them in one step:
 
 ```r
 install.packages(c(
-  "conflicted", "haven", "dplyr", "tidyr", "stringr", "naniar",
+  "haven", "dplyr", "tidyr", "stringr", "naniar",
   "psych", "corrplot", "ggplot2", "patchwork", "writexl",
-  "openxlsx", "poLCA", "effectsize", "broom"
+  "openxlsx", "poLCA", "effectsize", "broom", "car"
 ))
 ```
 
