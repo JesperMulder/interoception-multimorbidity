@@ -24,7 +24,7 @@ changed there if your files have different names or locations.
 
 The raw data are not publicly available. They contain sensitive health and
 demographic information collected under ethics approval. Access may be
-requested from the corresponding author ([insert email]) subject to
+requested from the corresponding author (j.mulder6@lumc.nl) subject to
 institutional data-sharing agreements.
 
 See the **Data Availability Statement** in the published manuscript for full

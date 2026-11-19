@@ -91,7 +91,7 @@ base_path <- file.path("results")
 
 The raw participant data are not included in this repository. The data contain
 sensitive health information and cannot be shared openly. Access may be
-requested from the corresponding author ([insert contact email]) subject to
+requested from the corresponding author (j.mulder6@lumc.nl) subject to
 institutional data-sharing agreements and ethics approval conditions. See the
 Data Availability Statement in the published manuscript for full details.
 
