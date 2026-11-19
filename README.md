@@ -1,21 +1,18 @@
 # Multimorbidity and Interoception
 
-This repository contains the complete R analysis script accompanying the manuscript:
+This repository contains the R analysis script for the manuscript:
 
-> Title: Interoceptive accuracy and attention across multimorbidity classes: A latent class analysis
-
-> Authors: Mulder, J., Böker, M., Smit, A.K., Kiefte-de Jong, J.C.
-
-> Journal: [TBD]
-
-> DOI: [TBD]
+- **Title:** Interoceptive accuracy and attention across multimorbidity classes: A latent class analysis
+- **Authors:** Mulder, J., Böker, M., Smit, A.K., Kiefte-de Jong, J.C.
+- **Journal:** [TBD]
+- **DOI:** [TBD]
 
 ## Overview
 
-The script (`LCA_Analyses.R`) implements a full latent class analysis (LCA)
-pipeline examining health profiles and their association with interoceptive
-accuracy (IAS) and interoceptive attention (IATS) across two independent
-Dutch community samples (DA and L).
+The script (`LCA_Analyses.R`) runs a latent class analysis (LCA) of health
+profiles in two independent Dutch community samples (DA and L). It then tests
+how the classes differ in interoceptive accuracy (IAS) and interoceptive
+attention (IATS).
 
 ### Analysis sections
 
@@ -39,9 +36,18 @@ Dutch community samples (DA and L).
 
 ## Requirements
 
-* Tested on R version 4.6.1
-* All required packages are listed at the top of `LCA_Analyses.R`.
-Install them in one step:
+- R 4.6.1 (the version used for the analyses)
+- The 15 packages listed at the top of `LCA_Analyses.R`
+
+The package versions are locked with [renv](https://rstudio.github.io/renv/).
+To install them, open the repository folder as an R project and run:
+
+```r
+install.packages("renv")  # only if renv is not installed yet
+renv::restore()
+```
+
+Without renv, install the packages directly:
 
 ```r
 install.packages(c(
@@ -57,13 +63,16 @@ install.packages(c(
 
 ```
 .
-├── LCA_Analyses.R      # Main analysis script (all sections)
-├── data/               # Raw data — NOT included (see Data Availability)
-│   └── raw/            # Place the two .sav files here before running
-├── results/            # All outputs written here by the script
+├── LCA_Analyses.R      # Analysis script (all sections)
+├── data/               # Raw data (not included, see Data Availability)
+│   └── raw/            # Put the two .sav files here before running
+├── results/            # The script writes all outputs here
 │   ├── *.xlsx          # Descriptive tables, fit indices, regression results
 │   ├── *.png           # Profile plots, elbow plots, coefficient plots
 │   └── sessionInfo.txt # R session info from the analysis run
+├── renv.lock           # Locked package versions
+├── renv/               # renv setup files
+├── .Rprofile           # Activates renv when the project opens
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -74,8 +83,8 @@ install.packages(c(
 ## Usage
 
 1. Clone or download this repository.
-2. Obtain the raw data files (see **Data Availability** below) and place them in `data/raw/`.
-3. Set the repository folder as your R working directory (in RStudio: open the folder as a project or use `setwd()`). The script uses paths relative to this folder, so no path edits are needed as long as the files in `data/raw/` have these names (set in **Section 1** of `LCA_Analyses.R`):
+2. Request the raw data files (see **Data Availability** below) and put them in `data/raw/`.
+3. Open the repository folder as your R working directory. In RStudio, open it as a project; otherwise use `setwd()`. The script uses paths relative to this folder. You need no path edits if the files in `data/raw/` have the names set in **Section 1** of `LCA_Analyses.R`:
 
 ```r
 path_da   <- file.path("data", "raw", "Part1_19082024_clean_JM_version2.sav")
@@ -83,29 +92,28 @@ path_l    <- file.path("data", "raw", "Part2_19082024_clean_JM_version2.sav")
 base_path <- file.path("results")
 ```
 
-4. Run the script from top to bottom (e.g., `source("LCA_Analyses.R")` or execute section-by-section in RStudio).
+4. Run the script from top to bottom, with `source("LCA_Analyses.R")` or section by section in RStudio.
 
 ---
 
 ## Data Availability
 
-The raw participant data are not included in this repository. The data contain
-sensitive health information and cannot be shared openly. Access may be
-requested from the corresponding author (j.mulder6@lumc.nl) subject to
-institutional data-sharing agreements and ethics approval conditions. See the
-Data Availability Statement in the published manuscript for full details.
+The raw participant data are not in this repository. They contain sensitive
+health information and cannot be shared openly. You can request access from the
+corresponding author (j.mulder6@lumc.nl), subject to institutional
+data-sharing agreements and ethics approval conditions. The Data Availability
+Statement in the published manuscript has the full details.
 
 ---
 
 ## License
 
-This code is released under the [MIT License](LICENSE). You are free to use,
-adapt, and redistribute it with attribution.
+This code is released under the [MIT License](LICENSE). You may use, adapt and
+redistribute it with attribution.
 
 ---
 
 ## Contact
 
-**Corresponding author:** Jesper Mulder — j.mulder6@lumc.nl
-**Issues / questions about the code:** please open a [GitHub Issue](../../issues).
-
+**Corresponding author:** Jesper Mulder, j.mulder6@lumc.nl
+**Questions about the code:** open a [GitHub Issue](../../issues).
