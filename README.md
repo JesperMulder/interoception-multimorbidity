@@ -28,9 +28,12 @@ Dutch community samples (DA and L).
 |5|Outlier detection|
 |6|Descriptive statistics & internal consistency|
 |7|Latent Class Analysis (K-selection, BLRT, profile plots)|
-|8|OLS regression of LCA class on interoceptive outcomes|
+|8|Regression of interoceptive outcomes on LCA class (BCH and modal-assignment OLS)|
 |9|Sensitivity analyses (covariate-adjusted regressions)|
-|10|Reproducibility check & session information|
+|10|Direct comparison by disease status|
+|11|Joint analysis of interoceptive accuracy and attention|
+|12|Sensitivity: LCA with alternative multimorbidity definition|
+|13|Covariate adjustment strategies and sex differences|
 
 ---
 
